@@ -1,3 +1,4 @@
+# models
 from database import (
     conectar_admin,
     conectar_academia,
@@ -8,33 +9,23 @@ from database import (
 
 # --------------------- Academias ---------------------
 def listar_academias():
-    """
-    Devuelve lista de (nombre_visible, dbname) de academias.
-    """
     conn = conectar_admin()
     cursor = conn.cursor()
     cursor.execute("SELECT nombre, dbname FROM academias ORDER BY nombre")
     academias = cursor.fetchall()
     cursor.close()
     conn.close()
-    return academias  # [(nombre_visible, dbname), ...]
+    return academias
 
 def crear_academia(nombre):
-    """
-    Crea academia (tabla admin y base datos) y devuelve dbname.
-    NO duplica registros si ya existe (por nombre o dbname).
-    """
     dbname = normalizar_nombre_db(nombre)
     conn = conectar_admin()
     cursor = conn.cursor()
-    # ¿Ya existe academia con ese nombre o dbname?
     cursor.execute("SELECT id FROM academias WHERE nombre=%s OR dbname=%s", (nombre, dbname))
     res = cursor.fetchone()
     if res is None:
-        # Insertar solo si no existe
         cursor.execute("INSERT INTO academias (nombre, dbname) VALUES (%s, %s)", (nombre, dbname))
         conn.commit()
-        # Crear la base de datos y tablas
         crear_bd_academia(nombre)
     cursor.close()
     conn.close()
@@ -68,24 +59,38 @@ def listar_usuarios(dbname):
     return usuarios
 
 # --------------------- Alumnos ---------------------
-def agregar_alumno(dbname, nombre, apellidos, dni, telefono, mail, fecha_nac, fecha_fin, curso):
+def agregar_alumno(
+    dbname, nombre, apellidos, dni, telefono, mail, fecha_nac, fecha_fin, curso,
+    familia_curso, codigo_curso, estudios_completados, grado_curso, ocupacion
+):
     conn = conectar_academia(dbname)
     cursor = conn.cursor()
     cursor.execute("""
-        INSERT INTO alumnos (nombre, apellidos, dni, telefono, mail, fecha_nacimiento, fecha_finalizacion, curso)
-        VALUES (%s,%s,%s,%s,%s,%s,%s,%s)
-    """, (nombre, apellidos, dni, telefono, mail, fecha_nac, fecha_fin, curso))
+        INSERT INTO alumnos (
+            nombre, apellidos, dni, telefono, mail, fecha_nacimiento, fecha_finalizacion, curso,
+            familia_curso, codigo_curso, estudios_completados, grado_curso, ocupacion
+        ) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
+    """, (nombre, apellidos, dni, telefono, mail, fecha_nac, fecha_fin, curso,
+          familia_curso, codigo_curso, estudios_completados, grado_curso, ocupacion))
     conn.commit()
     cursor.close()
     conn.close()
 
-def actualizar_alumno(dbname, id_alumno, nombre, apellidos, dni, telefono, mail, fecha_nac, fecha_fin, curso):
+def actualizar_alumno(
+    dbname, id_alumno, nombre, apellidos, dni, telefono, mail, fecha_nac, fecha_fin, curso,
+    familia_curso, codigo_curso, estudios_completados, grado_curso, ocupacion
+):
     conn = conectar_academia(dbname)
     cursor = conn.cursor()
     cursor.execute("""
-        UPDATE alumnos SET nombre=%s, apellidos=%s, dni=%s, telefono=%s, mail=%s, fecha_nacimiento=%s, fecha_finalizacion=%s, curso=%s
+        UPDATE alumnos SET
+            nombre=%s, apellidos=%s, dni=%s, telefono=%s, mail=%s,
+            fecha_nacimiento=%s, fecha_finalizacion=%s, curso=%s,
+            familia_curso=%s, codigo_curso=%s, estudios_completados=%s,
+            grado_curso=%s, ocupacion=%s
         WHERE id=%s
-    """, (nombre, apellidos, dni, telefono, mail, fecha_nac, fecha_fin, curso, id_alumno))
+    """, (nombre, apellidos, dni, telefono, mail, fecha_nac, fecha_fin, curso,
+          familia_curso, codigo_curso, estudios_completados, grado_curso, ocupacion, id_alumno))
     conn.commit()
     cursor.close()
     conn.close()
@@ -102,7 +107,11 @@ def obtener_alumnos(dbname, filtro=""):
     conn = conectar_academia(dbname)
     cursor = conn.cursor()
     if filtro:
-        cursor.execute("SELECT * FROM alumnos WHERE nombre LIKE %s OR apellidos LIKE %s ORDER BY apellidos, nombre", (f'%{filtro}%', f'%{filtro}%'))
+        cursor.execute("""
+            SELECT * FROM alumnos
+            WHERE nombre LIKE %s OR apellidos LIKE %s
+            ORDER BY apellidos, nombre
+        """, (f'%{filtro}%', f'%{filtro}%'))
     else:
         cursor.execute("SELECT * FROM alumnos ORDER BY apellidos, nombre")
     alumnos = cursor.fetchall()
@@ -111,10 +120,11 @@ def obtener_alumnos(dbname, filtro=""):
     return alumnos
 
 def filtrar_alumnos_avanzado(
-    dbname, nombre="", apellidos="", fecha_nac_desde=None, fecha_nac_hasta=None,
-    curso="", fecha_fin_desde=None, fecha_fin_hasta=None
+    dbname,
+    nombre="", apellidos="", fecha_nac_desde=None, fecha_nac_hasta=None,
+    curso="", fecha_fin_desde=None, fecha_fin_hasta=None,
+    familia_curso="", codigo_curso="", estudios_completados="", grado_curso=None, ocupacion=""
 ):
-    # Permite hacer búsquedas avanzadas por los campos principales
     sql = "SELECT * FROM alumnos WHERE 1=1"
     params = []
     if nombre:
@@ -138,6 +148,21 @@ def filtrar_alumnos_avanzado(
     if fecha_fin_hasta:
         sql += " AND fecha_finalizacion <= %s"
         params.append(fecha_fin_hasta)
+    if familia_curso:
+        sql += " AND familia_curso LIKE %s"
+        params.append(f'%{familia_curso}%')
+    if codigo_curso:
+        sql += " AND codigo_curso LIKE %s"
+        params.append(f'%{codigo_curso}%')
+    if estudios_completados:
+        sql += " AND estudios_completados LIKE %s"
+        params.append(f'%{estudios_completados}%')
+    if grado_curso is not None and grado_curso != "":
+        sql += " AND grado_curso = %s"
+        params.append(grado_curso)
+    if ocupacion:
+        sql += " AND ocupacion = %s"
+        params.append(ocupacion)
     sql += " ORDER BY apellidos, nombre"
     conn = conectar_academia(dbname)
     cursor = conn.cursor()

@@ -26,6 +26,9 @@ nombres = ["Juan", "Lucía", "Carlos", "Ana", "Pedro", "Marta", "Luis", "Sara", 
 apellidos = ["García", "Martínez", "López", "Sánchez", "Pérez", "Gómez", "Díaz", "Ruiz", "Moreno", "Álvarez",
              "Jiménez", "Romero", "Navarro", "Torres", "Domínguez", "Vázquez", "Ramos", "Gil", "Serrano", "Molina"]
 cursos = ["Python Básico", "Excel Pro", "Inglés A2", "Word Experto", "Contabilidad", "Redes", "Mecánica", "Francés", "Matemáticas", "Química"]
+familias = ["Informática", "Idiomas", "Administración", "Ciencias", "Mecánica"]
+codigos = ["IFC0609", "ADG0108", "SSCE0110", "ELEE0109", "HOTR0108"]
+estudios = ["ESO", "Bachillerato", "Grado Medio", "Grado Superior", "Universitario"]
 
 # 4. Insertar 20 alumnos
 for i in range(20):
@@ -45,6 +48,11 @@ for i in range(20):
     dia_fin = random.randint(1, 28)
     fecha_finalizacion = datetime.date(anio_fin, mes_fin, dia_fin)
     curso = random.choice(cursos)
+    familia_curso = random.choice(familias)
+    codigo_curso = random.choice(codigos)
+    estudios_completados = random.choice(estudios)
+    grado_curso = random.choice([1, 2, 3, 4])
+    ocupacion = random.choice(["Empleado", "Desempleado"])
 
     try:
         agregar_alumno(
@@ -56,7 +64,12 @@ for i in range(20):
             mail,
             fecha_nacimiento,
             fecha_finalizacion,
-            curso
+            curso,
+            familia_curso,
+            codigo_curso,
+            estudios_completados,
+            grado_curso,
+            ocupacion
         )
         print(f"Alumno {nombre} {apellido} añadido")
     except Exception as e:

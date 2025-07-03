@@ -17,6 +17,9 @@ import datetime
 import webbrowser
 import tempfile
 import os
+import pandas as pd
+from tkinter import filedialog
+
 
 TAB_COLOR = "#e9f0fb"
 
@@ -203,34 +206,143 @@ def pantalla_principal(dbname, usuario):
     tk.Label(root, text="© 2025 PRACTICADORES.DEV", bg=TAB_COLOR, fg="#375aab", font=("Segoe UI", 11, "italic")).pack(side='bottom', pady=4)
     root.mainloop()
 
+def importar_alumnos_desde_excel(dbname, cargar_y_actualizar, parent):
+    file_path = filedialog.askopenfilename(
+        parent=parent,
+        title="Selecciona archivo Excel o CSV",
+        filetypes=[("Archivos Excel", "*.xlsx *.xls"), ("CSV", "*.csv"), ("Todos", "*.*")]
+    )
+    if not file_path:
+        return
+
+    try:
+        if file_path.endswith('.csv'):
+            df = pd.read_csv(file_path)
+        else:
+            df = pd.read_excel(file_path)
+    except Exception as e:
+        messagebox.showerror("Error", f"No se pudo leer el archivo: {e}", parent=parent)
+        return
+
+    columnas_archivo = list(df.columns)
+    campos_bd = [
+        'Nombre', 'Apellidos', 'DNI', 'Teléfono', 'Mail',
+        'Fecha nacimiento', 'Fecha finalización', 'Curso',
+        'Familia curso', 'Código curso', 'Estudios completados', 'Grado curso', 'Ocupación'
+    ]
+
+    ventana_map = tk.Toplevel(parent)
+    ventana_map.title("Asociar columnas")
+    ventana_map.geometry("480x540")
+    asignaciones = {}
+    for i, campo in enumerate(campos_bd):
+        ttk.Label(ventana_map, text=f"{campo}").grid(row=i, column=0, padx=7, pady=4, sticky='e')
+        var = tk.StringVar()
+        cb = ttk.Combobox(ventana_map, textvariable=var, values=[""] + columnas_archivo, width=26, state="readonly")
+        cb.grid(row=i, column=1, padx=7, pady=4)
+        asignaciones[campo] = var
+
+    def ejecutar_importacion():
+        mapeo = {campo: var.get() for campo, var in asignaciones.items()}
+        # Validación de campos obligatorios
+        if not mapeo['Nombre'] or not mapeo['Apellidos']:
+            messagebox.showwarning("Campos obligatorios", "Debes asignar las columnas de Nombre y Apellidos.", parent=ventana_map)
+            return
+        count_ok, count_fail = 0, 0
+        for idx, row in df.iterrows():
+            datos = []
+            for campo in campos_bd:
+                col = mapeo[campo]
+                if col:
+                    val = row.get(col, "")
+                    # Parsear fechas si el campo tiene "fecha"
+                    if "fecha" in campo.lower() and val:
+                        try:
+                            if isinstance(val, str):
+                                val = pd.to_datetime(val, dayfirst=True, errors='coerce').date()
+                            else:
+                                val = val.date()
+                        except Exception:
+                            val = None
+                    datos.append(val)
+                else:
+                    datos.append("")
+            try:
+                agregar_alumno(dbname, *datos)
+                count_ok += 1
+            except Exception:
+                count_fail += 1
+        ventana_map.destroy()
+        cargar_y_actualizar()
+        messagebox.showinfo(
+            "Importación completada",
+            f"Alumnos importados: {count_ok}\nFallidos: {count_fail}",
+            parent=parent
+        )
+
+    ttk.Button(ventana_map, text="Importar", command=ejecutar_importacion).grid(row=len(campos_bd)+1, column=1, pady=18)
+
 # --------- Contenido de la pestaña de alumnos ---------
 def contenido_alumnos(tab, dbname, root):
-    frame = ttk.Frame(tab, padding=18)
-    frame.pack(fill='both', expand=True, padx=24, pady=16)
+    # Colores y estilos personalizados
+    BG_FORM = "#eaf3fc"
+    BG_TAB = "#e6f2ff"
+    BG_HEADER = "#375aab"
+    COLOR_LABEL = "#234b80"
+    COLOR_FONDO = "#e7f0fb"
 
+    frame = ttk.Frame(tab, padding=18, style="Custom.TFrame")
+    frame.pack(fill='both', expand=True, padx=24, pady=16)
+    root.configure(bg=COLOR_FONDO)
+    tab.configure(bg=COLOR_FONDO)
+
+    style = ttk.Style()
+    style.theme_use('default')
+    style.configure("Custom.TFrame", background=BG_FORM)
+    style.configure("Custom.TLabel", background=BG_FORM, foreground=COLOR_LABEL, font=('Segoe UI', 11))
+    style.configure("Custom.TLabelframe", background=BG_FORM, foreground=COLOR_LABEL)
+    style.configure("Custom.Treeview", background=BG_TAB, fieldbackground=BG_TAB, font=('Segoe UI', 11))
+    style.configure("Custom.Treeview.Heading", background=BG_HEADER, foreground="white", font=('Segoe UI', 11, "bold"))
+    style.map('TButton', background=[('active', BG_HEADER), ('!active', BG_HEADER)])
+
+    # Etiquetas y campos (añade aquí tus campos extra)
     labels = [
         'Nombre', 'Apellidos', 'DNI', 'Teléfono', 'Mail',
-        'Fecha nacimiento (dd-mm-yyyy)', 'Fecha finalización (dd-mm-yyyy)', 'Curso'
+        'Fecha nacimiento (dd-mm-yyyy)', 'Fecha finalización (dd-mm-yyyy)', 'Curso',
+        'Familia curso', 'Código curso', 'Estudios completados', 'Grado curso', 'Ocupación'
     ]
-    keys = ['nombre', 'apellidos', 'dni', 'telefono', 'mail', 'fecha_nac', 'fecha_fin', 'curso']
+    keys = [
+        'nombre', 'apellidos', 'dni', 'telefono', 'mail',
+        'fecha_nac', 'fecha_fin', 'curso',
+        'familia_curso', 'codigo_curso', 'estudios_completados', 'grado_curso', 'ocupacion'
+    ]
     campos = {}
 
-    form = ttk.LabelFrame(frame, text="Datos del Alumno", padding=(18,10))
+    form = ttk.LabelFrame(frame, text="Datos del Alumno", padding=(18, 10), style="Custom.TLabelframe")
     form.grid(row=0, column=0, sticky='nw', rowspan=3, pady=10)
 
+    # Campos normales + desplegables
     for i, (label, key) in enumerate(zip(labels, keys)):
-        ttk.Label(form, text=label + ":", anchor='w').grid(row=i, column=0, pady=7, sticky='e')
-        entry = ttk.Entry(form, width=24, font=('Segoe UI', 12))
-        entry.grid(row=i, column=1, pady=7, padx=7, sticky='w')
-        campos[key] = entry
+        ttk.Label(form, text=label + ":", anchor='w', style="Custom.TLabel").grid(row=i, column=0, pady=4, sticky='e')
+        if key == "grado_curso":
+            campo = ttk.Combobox(form, values=[1, 2, 3, 4], width=22, state="readonly")
+        elif key == "ocupacion":
+            campo = ttk.Combobox(form, values=["Empleado", "Desempleado"], width=22, state="readonly")
+        else:
+            campo = ttk.Entry(form, width=24, font=('Segoe UI', 12))
+        campo.grid(row=i, column=1, pady=4, padx=7, sticky='w')
+        campos[key] = campo
 
     # Botones CRUD
-    btns = ttk.Frame(form)
-    btns.grid(row=8, column=0, columnspan=2, pady=(18, 8))
+    btns = ttk.Frame(form, style="Custom.TFrame")
+    btns.grid(row=len(labels), column=0, columnspan=2, pady=(14, 7))
 
     def limpiar_formulario():
-        for campo in campos.values():
-            campo.delete(0, tk.END)
+        for key, campo in campos.items():
+            if key in ["grado_curso", "ocupacion"]:
+                campo.set("")
+            else:
+                campo.delete(0, tk.END)
 
     pagina_actual = [0]
     PAGINA_TAMANO = 25
@@ -246,18 +358,20 @@ def contenido_alumnos(tab, dbname, root):
             tag = 'evenrow' if i % 2 == 0 else 'oddrow'
             tree.insert('', tk.END, values=alumno, tags=(tag,))
         tree.tag_configure('evenrow', background='#eaf3fc')
-        tree.tag_configure('oddrow', background='#f7fbff')
+        tree.tag_configure('oddrow', background='#d6e6f5')
         max_pagina = max(0, (len(alumnos) - 1) // PAGINA_TAMANO)
         btn_ant.config(state=tk.NORMAL if pagina_actual[0] > 0 else tk.DISABLED)
         btn_sig.config(state=tk.NORMAL if pagina_actual[0] < max_pagina else tk.DISABLED)
         lbl_pag.config(text=f"Página {pagina_actual[0]+1} de {max_pagina+1}")
 
     def guardar():
-        vals = [campos[k].get() for k in keys]
+        vals = []
+        for key in keys:
+            v = campos[key].get() if hasattr(campos[key], 'get') else ""
+            vals.append(v)
         if not vals[0] or not vals[1]:
             messagebox.showwarning("Atención", "Nombre y apellidos obligatorios.")
             return
-        # Validar fechas
         try:
             fecha_nac_db = _parse_fecha(vals[5])
             fecha_fin_db = _parse_fecha(vals[6]) if vals[6] else None
@@ -265,7 +379,7 @@ def contenido_alumnos(tab, dbname, root):
             messagebox.showerror("Error", "Formato de fecha incorrecto (usa dd-mm-yyyy).")
             return
         try:
-            agregar_alumno(dbname, vals[0], vals[1], vals[2], vals[3], vals[4], fecha_nac_db, fecha_fin_db, vals[7])
+            agregar_alumno(dbname, *vals[:5], fecha_nac_db, fecha_fin_db, *vals[7:])
             pagina_actual[0] = 0
             cargar_y_actualizar()
             limpiar_formulario()
@@ -279,7 +393,10 @@ def contenido_alumnos(tab, dbname, root):
             messagebox.showwarning("Selecciona", "Selecciona un alumno de la tabla.")
             return
         id_alum = tree.item(sel, 'values')[0]
-        vals = [campos[k].get() for k in keys]
+        vals = []
+        for key in keys:
+            v = campos[key].get() if hasattr(campos[key], 'get') else ""
+            vals.append(v)
         try:
             fecha_nac_db = _parse_fecha(vals[5])
             fecha_fin_db = _parse_fecha(vals[6]) if vals[6] else None
@@ -287,7 +404,7 @@ def contenido_alumnos(tab, dbname, root):
             messagebox.showerror("Error", "Formato de fecha incorrecto (usa dd-mm-yyyy).")
             return
         try:
-            actualizar_alumno(dbname, id_alum, vals[0], vals[1], vals[2], vals[3], vals[4], fecha_nac_db, fecha_fin_db, vals[7])
+            actualizar_alumno(dbname, id_alum, *vals[:5], fecha_nac_db, fecha_fin_db, *vals[7:])
             cargar_y_actualizar()
             limpiar_formulario()
             messagebox.showinfo("Éxito", "Alumno actualizado.")
@@ -314,17 +431,25 @@ def contenido_alumnos(tab, dbname, root):
         if item:
             datos = tree.item(item, 'values')
             for key, entry, value in zip(keys, campos.values(), datos[1:]):
-                entry.delete(0, tk.END)
-                entry.insert(0, value)
+                if hasattr(entry, "set"):
+                    entry.set(value)
+                else:
+                    entry.delete(0, tk.END)
+                    entry.insert(0, value)
 
     ttk.Button(btns, text="💾 Guardar", command=guardar).pack(side='left', padx=7)
     ttk.Button(btns, text="✏️ Actualizar", command=actualizar).pack(side='left', padx=7)
     ttk.Button(btns, text="🗑️ Borrar", command=borrar).pack(side='left', padx=7)
     ttk.Button(btns, text="🧹 Limpiar", command=limpiar_formulario).pack(side='left', padx=7)
+    ttk.Button(btns, text="📥 Importar Excel", command=lambda: importar_alumnos_desde_excel(dbname, cargar_y_actualizar, root)).pack(side='left', padx=7)
 
-    # Tabla de alumnos
-    cols = ('ID', 'Nombre', 'Apellidos', 'DNI', 'Teléfono', 'Mail', 'Fecha nacimiento', 'Fecha finalización', 'Curso')
-    tree = ttk.Treeview(frame, columns=cols, show='headings', height=16)
+    # Tabla de alumnos (ahora con 25 filas de altura)
+    cols = (
+        'ID', 'Nombre', 'Apellidos', 'DNI', 'Teléfono', 'Mail',
+        'Fecha nacimiento', 'Fecha finalización', 'Curso',
+        'Familia curso', 'Código curso', 'Estudios completados', 'Grado curso', 'Ocupación'
+    )
+    tree = ttk.Treeview(frame, columns=cols, show='headings', height=25, style="Custom.Treeview")
     for i, col in enumerate(cols):
         tree.heading(col, text=col)
         ancho = 60 if i==0 else 110 if i in (6,7) else 105
@@ -336,13 +461,13 @@ def contenido_alumnos(tab, dbname, root):
     tree.bind('<<TreeviewSelect>>', seleccionar_fila)
 
     # Paginación
-    paginacion = ttk.Frame(frame)
+    paginacion = ttk.Frame(frame, style="Custom.TFrame")
     paginacion.grid(row=2, column=1, pady=8, sticky='w')
     btn_ant = ttk.Button(paginacion, text="◀ Anterior", command=lambda: _cambiar_pagina(pagina_actual, -1, cargar_y_actualizar))
     btn_ant.pack(side='left', padx=4)
     btn_sig = ttk.Button(paginacion, text="Siguiente ▶", command=lambda: _cambiar_pagina(pagina_actual, 1, cargar_y_actualizar))
     btn_sig.pack(side='left', padx=4)
-    lbl_pag = ttk.Label(paginacion, text="Página 1")
+    lbl_pag = ttk.Label(paginacion, text="Página 1", style="Custom.TLabel")
     lbl_pag.pack(side='left', padx=12)
 
     # Email masivo a seleccionados
@@ -351,12 +476,21 @@ def contenido_alumnos(tab, dbname, root):
 
     cargar_y_actualizar()
 
+
 # --------- Imprimir y exportar PDF ---------
 def imprimir_alumnos(dbname):
     datos = obtener_alumnos(dbname)
-    contenido = "Listado de Alumnos\n\n"
+    contenido = (
+        "Listado de Alumnos\n\n"
+        "Nombre | Apellidos | DNI | Teléfono | Mail | Fecha nacimiento | Fecha finalización | Curso | "
+        "Familia curso | Código curso | Estudios completados | Grado curso | Ocupación\n"
+        + "-"*160 + "\n"
+    )
     for a in datos:
-        contenido += f"{a[1]} {a[2]} | {a[3]} | {a[4]} | {a[5]} | {a[6]} | {a[7]} | {a[8]}\n"
+        contenido += (
+            f"{a[1]} | {a[2]} | {a[3]} | {a[4]} | {a[5]} | {a[6]} | {a[7]} | {a[8]} | "
+            f"{a[9]} | {a[10]} | {a[11]} | {a[12]} | {a[13]}\n"
+        )
     with tempfile.NamedTemporaryFile("w", delete=False, suffix=".txt") as f:
         f.write(contenido)
         temp_file = f.name
@@ -369,7 +503,7 @@ def imprimir_alumnos(dbname):
 
 def exportar_pdf(dbname):
     try:
-        from reportlab.lib.pagesizes import letter
+        from reportlab.lib.pagesizes import letter, landscape
         from reportlab.pdfgen import canvas as pdfcanvas
     except ImportError:
         messagebox.showerror("Falta módulo", "Instala reportlab: pip install reportlab")
@@ -379,21 +513,39 @@ def exportar_pdf(dbname):
     if not filename:
         return
     pdf_file = f"{filename}.pdf"
-    c = pdfcanvas.Canvas(pdf_file, pagesize=letter)
-    y = 760
-    c.setFont("Helvetica", 10)
-    c.drawString(40, y, "Listado de Alumnos")
-    y -= 20
+    c = pdfcanvas.Canvas(pdf_file, pagesize=landscape(letter))
+    y = 540
+    c.setFont("Helvetica-Bold", 9)
+    headers = [
+        "Nombre", "Apellidos", "DNI", "Teléfono", "Mail",
+        "Fecha nacimiento", "Fecha finalización", "Curso",
+        "Familia curso", "Código curso", "Estudios completados",
+        "Grado curso", "Ocupación"
+    ]
+    # Imprime cabecera
+    x_positions = [25, 105, 210, 275, 340, 420, 510, 600, 690, 780, 860, 980, 1040]
+    for i, head in enumerate(headers):
+        c.drawString(x_positions[i], y, head)
+    y -= 18
+    c.setFont("Helvetica", 8)
     for a in datos:
-        linea = f"{a[1]} {a[2]} | {a[3]} | {a[4]} | {a[5]} | {a[6]} | {a[7]} | {a[8]}"
-        c.drawString(40, y, linea)
+        fila = [
+            a[1], a[2], a[3], a[4], a[5],
+            str(a[6]), str(a[7]), a[8], a[9], a[10], a[11], str(a[12]), a[13]
+        ]
+        for i, val in enumerate(fila):
+            c.drawString(x_positions[i], y, str(val)[:18])  # corta largo excesivo
         y -= 14
-        if y < 50:
+        if y < 40:
             c.showPage()
-            c.setFont("Helvetica", 10)
-            y = 760
+            c.setFont("Helvetica-Bold", 9)
+            for i, head in enumerate(headers):
+                c.drawString(x_positions[i], 540, head)
+            c.setFont("Helvetica", 8)
+            y = 522
     c.save()
     messagebox.showinfo("PDF", f"PDF guardado como {pdf_file}")
+
 
 # --------- Utilidades internas ---------
 def _animar_prisma(canvas, scale=1, offset_x=None, offset_y=None):

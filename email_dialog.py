@@ -1,3 +1,4 @@
+# email_dialog.py
 import tkinter as tk
 from tkinter import ttk, messagebox, filedialog
 from email_utils import enviar_email_masivo, abrir_gestor_externo
