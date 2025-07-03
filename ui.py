@@ -19,6 +19,52 @@ import tempfile
 import os
 import pandas as pd
 from tkinter import filedialog
+import subprocess
+
+def backup_base_datos(dbname, user, password, parent=None):
+    archivo = filedialog.asksaveasfilename(
+        defaultextension=".sql",
+        filetypes=[("SQL files", "*.sql")],
+        title="Guardar copia de seguridad",
+        parent=parent
+    )
+    if not archivo:
+        return
+
+    comando = [
+        "mysqldump",
+        f"-u{user}",
+        f"-p{password}",
+        dbname
+    ]
+    try:
+        with open(archivo, "w") as f:
+            subprocess.run(comando, stdout=f, check=True)
+        messagebox.showinfo("Backup", f"Copia de seguridad guardada en:\n{archivo}", parent=parent)
+    except Exception as e:
+        messagebox.showerror("Backup", f"Error al crear backup:\n{e}", parent=parent)
+
+def restaurar_base_datos(dbname, user, password, parent=None):
+    archivo = filedialog.askopenfilename(
+        filetypes=[("SQL files", "*.sql")],
+        title="Selecciona archivo SQL para restaurar",
+        parent=parent
+    )
+    if not archivo:
+        return
+
+    comando = [
+        "mysql",
+        f"-u{user}",
+        f"-p{password}",
+        dbname
+    ]
+    try:
+        with open(archivo, "r") as f:
+            subprocess.run(comando, stdin=f, check=True)
+        messagebox.showinfo("Restaurar", f"Base de datos restaurada desde:\n{archivo}", parent=parent)
+    except Exception as e:
+        messagebox.showerror("Restaurar", f"Error al restaurar:\n{e}", parent=parent)
 
 
 TAB_COLOR = "#e9f0fb"
@@ -202,6 +248,12 @@ def pantalla_principal(dbname, usuario):
     ttk.Button(botones, text="Imprimir", command=lambda: imprimir_alumnos(dbname)).pack(side='left', padx=16)
     ttk.Button(botones, text="Exportar PDF", command=lambda: exportar_pdf(dbname)).pack(side='left', padx=16)
     ttk.Button(botones, text="Cerrar sesión", command=lambda: [root.destroy(), pantalla_inicio()]).pack(side='left', padx=16)
+    # Usuario y contraseña de la BD para el backup
+    DB_USER = "root"
+    DB_PASS = "TuContraseñaSegura"  # <-- pon tu password real
+
+    ttk.Button(botones, text="Backup BD", command=lambda: backup_base_datos(dbname, DB_USER, DB_PASS, root)).pack(side='left', padx=16)
+    ttk.Button(botones, text="Restaurar BD", command=lambda: restaurar_base_datos(dbname, DB_USER, DB_PASS, root)).pack(side='left', padx=16)
 
     tk.Label(root, text="© 2025 PRACTICADORES.DEV", bg=TAB_COLOR, fg="#375aab", font=("Segoe UI", 11, "italic")).pack(side='bottom', pady=4)
     root.mainloop()
