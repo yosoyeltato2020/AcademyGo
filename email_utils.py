@@ -1,30 +1,54 @@
+# email_utils.py
 import smtplib
-from email.mime.text import MIMEText
+from email.message import EmailMessage
+import webbrowser
 
-# Modifica esto con tus datos reales si lo deseas
-SMTP_SERVER = "smtp.example.com"
+# ------- Configuración SMTP (ajústalo a tus necesidades) -------
+SMTP_HOST = 'smtp.gmail.com'
 SMTP_PORT = 587
-SMTP_USER = "tucuenta@example.com"
-SMTP_PASS = "tucontraseña"
+SMTP_USER = 'tuemail@gmail.com'
+SMTP_PASS = 'tu_clave_app_o_password'
 
-def enviar_email_masivo(destinatarios, asunto, mensaje):
-    enviados = 0
-    errores = 0
-    # --- SIMULACIÓN: SOLO PRINT, CAMBIA A SMTP REAL SI LO DESEAS ---
-    for dest in destinatarios:
-        try:
-            print(f"Enviando a: {dest}\nAsunto: {asunto}\nMensaje:\n{mensaje}\n")
-            # Para producción descomenta y configura SMTP:
-            # msg = MIMEText(mensaje)
-            # msg["Subject"] = asunto
-            # msg["From"] = SMTP_USER
-            # msg["To"] = dest
-            # with smtplib.SMTP(SMTP_SERVER, SMTP_PORT) as server:
-            #     server.starttls()
-            #     server.login(SMTP_USER, SMTP_PASS)
-            #     server.sendmail(SMTP_USER, dest, msg.as_string())
-            enviados += 1
-        except Exception as e:
-            print(f"Error enviando a {dest}: {e}")
-            errores += 1
+def enviar_email_masivo(destinatarios, asunto, cuerpo, cc=None, adjuntos=None):
+    enviados, errores = 0, 0
+    msg = EmailMessage()
+    msg['From'] = SMTP_USER
+    msg['To'] = ', '.join(destinatarios)
+    if cc:
+        msg['Cc'] = ', '.join(cc)
+    msg['Subject'] = asunto
+    msg.set_content(cuerpo)
+    # Adjuntos
+    if adjuntos:
+        for ruta in adjuntos:
+            try:
+                with open(ruta, 'rb') as f:
+                    data = f.read()
+                filename = ruta.split('/')[-1]
+                msg.add_attachment(data, maintype='application', subtype='octet-stream', filename=filename)
+            except Exception as e:
+                errores += 1
+    try:
+        with smtplib.SMTP(SMTP_HOST, SMTP_PORT) as s:
+            s.starttls()
+            s.login(SMTP_USER, SMTP_PASS)
+            s.send_message(msg)
+            enviados = len(destinatarios)
+    except Exception as e:
+        errores += len(destinatarios)
     return enviados, errores
+
+def abrir_gestor_externo(to, subject, body, cc=None):
+    import urllib.parse
+    mailto = f"mailto:{urllib.parse.quote(to)}"
+    params = []
+    if cc:
+        params.append("cc=" + urllib.parse.quote(cc))
+    if subject:
+        params.append("subject=" + urllib.parse.quote(subject))
+    if body:
+        params.append("body=" + urllib.parse.quote(body))
+    url = mailto
+    if params:
+        url += '?' + '&'.join(params)
+    webbrowser.open(url)

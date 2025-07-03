@@ -1,7 +1,7 @@
 import tkinter as tk
-from tkinter import ttk, messagebox, simpledialog
+from tkinter import ttk, messagebox
 from models import filtrar_alumnos_avanzado
-from email_utils import enviar_email_masivo
+from email_dialog import ventana_redactar_email  # Ventana profesional para redactar email
 
 def abrir_busqueda_avanzada(dbname, root_parent):
     ventana = tk.Toplevel(root_parent)
@@ -33,8 +33,11 @@ def abrir_busqueda_avanzada(dbname, root_parent):
     def parse_fecha(txt):
         if not txt:
             return None
-        d, m, y = map(int, txt.split("-"))
-        return f"{y:04d}-{m:02d}-{d:02d}"
+        try:
+            d, m, y = map(int, txt.split("-"))
+            return f"{y:04d}-{m:02d}-{d:02d}"
+        except Exception:
+            return None
 
     def filtrar():
         res = filtrar_alumnos_avanzado(
@@ -49,9 +52,28 @@ def abrir_busqueda_avanzada(dbname, root_parent):
             tree.delete(i)
         for alum in res:
             tree.insert("", tk.END, values=alum)
+        lbl_total.config(text=f"Total: {len(res)} alumnos")
+
+    def limpiar():
+        for v in filtros.values():
+            v.set("")
+        filtrar()
+
+    def enviar_email():
+        seleccionados = [tree.item(iid, "values") for iid in tree.selection()]
+        if not seleccionados:
+            messagebox.showwarning("Sin selección", "Selecciona alumnos de la tabla para enviarles email.", parent=ventana)
+            return
+        emails = [alum[5] for alum in seleccionados if alum[5]]
+        if not emails:
+            messagebox.showwarning("Sin emails", "Ningún alumno seleccionado tiene email.", parent=ventana)
+            return
+        # Abre la ventana profesional de redacción de email
+        ventana_redactar_email(ventana, emails)
 
     ttk.Button(form, text="Buscar", command=filtrar).grid(row=2, column=0, padx=10, pady=10)
-    ttk.Button(form, text="Limpiar", command=lambda: [v.set("") for v in filtros.values()]).grid(row=2, column=1, padx=10, pady=10)
+    ttk.Button(form, text="Limpiar", command=limpiar).grid(row=2, column=1, padx=10, pady=10)
+    ttk.Button(ventana, text="Enviar email a seleccionados", command=enviar_email).pack(pady=7)
 
     cols = ('ID', 'Nombre', 'Apellidos', 'DNI', 'Teléfono', 'Mail', 'Fecha nacimiento', 'Fecha finalización', 'Curso')
     tree = ttk.Treeview(ventana, columns=cols, show='headings', height=16)
@@ -64,20 +86,7 @@ def abrir_busqueda_avanzada(dbname, root_parent):
     tree.configure(yscrollcommand=scrollbar.set)
     scrollbar.pack(side="right", fill="y")
 
-    def enviar_email():
-        seleccionados = [tree.item(iid, "values") for iid in tree.selection()]
-        if not seleccionados:
-            messagebox.showwarning("Sin selección", "Selecciona alumnos de la tabla para enviarles email.")
-            return
-        emails = [alum[5] for alum in seleccionados if alum[5]]
-        if not emails:
-            messagebox.showwarning("Sin emails", "Ningún alumno seleccionado tiene email.")
-            return
-        asunto = simpledialog.askstring("Asunto del email", "Introduce el asunto del email:")
-        mensaje = simpledialog.askstring("Mensaje", "Introduce el cuerpo del email:")
-        if not asunto or not mensaje:
-            return
-        enviados, errores = enviar_email_masivo(emails, asunto, mensaje)
-        messagebox.showinfo("Email", f"Emails enviados: {enviados}\nFallidos: {errores}")
+    lbl_total = ttk.Label(ventana, text="Total: 0 alumnos")
+    lbl_total.pack(pady=(2,4), anchor="w", padx=28)
 
-    ttk.Button(ventana, text="Enviar email a seleccionados", command=enviar_email).pack(pady=7)
+    filtrar()

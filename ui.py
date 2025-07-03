@@ -8,10 +8,15 @@ from models import (
     agregar_alumno, actualizar_alumno, borrar_alumno, obtener_alumnos,
 )
 from busqueda_avanzada import abrir_busqueda_avanzada
+from email_dialog import ventana_redactar_email
+
 from email_utils import enviar_email_masivo
 import platform
 import math
 import datetime
+import webbrowser
+import tempfile
+import os
 
 TAB_COLOR = "#e9f0fb"
 
@@ -20,26 +25,35 @@ def pantalla_inicio():
     root = tk.Tk()
     root.title("AcademyGo - Gestión de Academias")
     root.configure(bg="#375aab")
-    root.geometry("550x400")
+    root.geometry("920x840")
+    root.minsize(650, 730)  # Puedes ajustar si quieres más espacio
 
-    # Prisma animado arriba
-    canvas = tk.Canvas(root, width=400, height=130, bg="#375aab", highlightthickness=0)
-    canvas.pack(pady=(30, 8))
-    _animar_prisma(canvas)
+    # -------- Header superior -----------
+    header_frame = tk.Frame(root, bg="#375aab")
+    header_frame.pack(fill='x', pady=(36, 0))
+    canvas = tk.Canvas(header_frame, width=230, height=145, bg="#375aab", highlightthickness=0)
+    canvas.pack()
+    _animar_prisma(canvas, scale=1.08, offset_x=115, offset_y=80)
 
-    tk.Label(root, text="AcademyGo", bg="#375aab", fg="white", font=("Segoe UI", 28, "bold")).pack()
-    tk.Label(root, text="Gestión de Academias", bg="#375aab", fg="#c7e0fa", font=("Segoe UI", 17, "italic")).pack(pady=(0,20))
+    # Título y subtítulo
+    tk.Label(root, text="AcademyGo", bg="#375aab", fg="white", font=("Segoe UI", 33, "bold")).pack(pady=(7, 0))
+    tk.Label(root, text="Gestión de Academias", bg="#375aab", fg="#c7e0fa", font=("Segoe UI", 18, "italic")).pack(pady=(0, 19))
+
+    main_frame = tk.Frame(root, bg="#375aab")
+    main_frame.pack(pady=6)
 
     # --- Cargar academias y preparar mappings
     lista_academias = listar_academias()  # [(nombre, dbname)]
     nombres = [a[0] for a in lista_academias]
     mapping = {a[0]: a[1] for a in lista_academias}  # nombre_visible -> dbname
 
-    frame_academia = tk.Frame(root, bg="#375aab")
-    frame_academia.pack()
-    tk.Label(frame_academia, text="Academia:", bg="#375aab", fg="white", font=("Segoe UI", 13)).grid(row=0, column=0, padx=6, pady=6, sticky="e")
-    cb_academia = ttk.Combobox(frame_academia, values=nombres, width=25, font=("Segoe UI", 13), state="readonly")
-    cb_academia.grid(row=0, column=1, padx=8, pady=6)
+    # Selección de academia
+    frame_academia = tk.Frame(main_frame, bg="#375aab")
+    frame_academia.pack(pady=9)
+    tk.Label(frame_academia, text="Academia:", bg="#375aab", fg="white", font=("Segoe UI", 14)).grid(row=0, column=0, padx=7, pady=7, sticky="e")
+    cb_academia = ttk.Combobox(frame_academia, values=nombres, width=27, font=("Segoe UI", 14), state="readonly")
+    cb_academia.grid(row=0, column=1, padx=10, pady=8)
+    ttk.Button(frame_academia, text="Nueva academia", command=lambda: nueva_academia()).grid(row=0, column=2, padx=12)
 
     def refrescar_academias():
         nuevas = listar_academias()
@@ -58,17 +72,15 @@ def pantalla_inicio():
             cb_academia.set(nombre)
             messagebox.showinfo("Academia", f"Academia '{nombre}' creada correctamente.")
 
-    ttk.Button(frame_academia, text="Nueva academia", command=nueva_academia).grid(row=0, column=2, padx=6)
-
     # --- Login/registro usuario
-    frame_login = tk.Frame(root, bg="#375aab")
-    frame_login.pack(pady=(20,12))
-    tk.Label(frame_login, text="Usuario:", bg="#375aab", fg="white", font=("Segoe UI", 13)).grid(row=0, column=0, padx=8, pady=8, sticky="e")
-    entry_usuario = ttk.Entry(frame_login, width=23, font=("Segoe UI", 13))
-    entry_usuario.grid(row=0, column=1, padx=8)
-    tk.Label(frame_login, text="Contraseña:", bg="#375aab", fg="white", font=("Segoe UI", 13)).grid(row=1, column=0, padx=8, pady=8, sticky="e")
-    entry_contra = ttk.Entry(frame_login, show="*", width=23, font=("Segoe UI", 13))
-    entry_contra.grid(row=1, column=1, padx=8)
+    frame_login = tk.Frame(main_frame, bg="#375aab")
+    frame_login.pack(pady=(28, 10))
+    tk.Label(frame_login, text="Usuario:", bg="#375aab", fg="white", font=("Segoe UI", 14)).grid(row=0, column=0, padx=10, pady=11, sticky="e")
+    entry_usuario = ttk.Entry(frame_login, width=26, font=("Segoe UI", 14))
+    entry_usuario.grid(row=0, column=1, padx=10, pady=6)
+    tk.Label(frame_login, text="Contraseña:", bg="#375aab", fg="white", font=("Segoe UI", 14)).grid(row=1, column=0, padx=10, pady=11, sticky="e")
+    entry_contra = ttk.Entry(frame_login, show="*", width=26, font=("Segoe UI", 14))
+    entry_contra.grid(row=1, column=1, padx=10, pady=6)
 
     def registrar():
         nombre_acad = cb_academia.get()
@@ -105,15 +117,47 @@ def pantalla_inicio():
         else:
             messagebox.showerror("Login incorrecto", "Usuario o contraseña incorrectos.")
 
-    ttk.Button(frame_login, text="Registrar usuario", command=registrar).grid(row=2, column=0, pady=14)
-    ttk.Button(frame_login, text="Iniciar sesión", command=login).grid(row=2, column=1, pady=14)
+    btns_login = tk.Frame(main_frame, bg="#375aab")
+    btns_login.pack(pady=(6, 18))
+    ttk.Button(btns_login, text="Registrar usuario", command=registrar).pack(side='left', padx=22)
+    ttk.Button(btns_login, text="Iniciar sesión", command=login).pack(side='left', padx=22)
 
-    tk.Label(root, text="Desarrollado por PRACTICADORES.DEV", bg="#375aab", fg="#c7e0fa", font=("Segoe UI", 10, "italic")).pack(side="bottom", pady=5)
+    # ---- Footer profesional (ayuda, contacto, sobre, soporte) ----
+    ttk.Separator(root, orient='horizontal').pack(fill='x', padx=38, pady=(7, 1))
+    footer = tk.Frame(root, bg="#375aab")
+    footer.pack(side='bottom', fill='x', pady=(18, 0))
+
+    def _abrir_ayuda():
+        messagebox.showinfo("Ayuda AcademyGo", "Guía rápida:\n\n"
+            "1. Selecciona tu academia o crea una nueva.\n"
+            "2. Registra tu usuario o inicia sesión.\n"
+            "3. Gestiona los alumnos y sus cursos fácilmente.\n\n"
+            "¿Dudas? Contacta soporte en el botón 'Contacto' o consulta el manual en línea.")
+
+    def _abrir_contacto():
+        webbrowser.open_new_tab("mailto:soporte@practicadores.dev?subject=Soporte%20AcademyGo")
+
+    def _abrir_sobre():
+        messagebox.showinfo("Sobre AcademyGo", "AcademyGo\n\n"
+            "Desarrollado por PRACTICADORES.DEV\n"
+            "Versión 2025. Todos los derechos reservados.\n"
+            "Más info: https://practicadores.dev")
+
+    def _abrir_soporte():
+        webbrowser.open_new_tab("https://practicadores.dev/soporte")
+
+    btn_footer = tk.Frame(footer, bg="#375aab")
+    btn_footer.pack(pady=6)
+    ttk.Button(btn_footer, text="Ayuda", command=_abrir_ayuda).pack(side='left', padx=11)
+    ttk.Button(btn_footer, text="Contacto", command=_abrir_contacto).pack(side='left', padx=11)
+    ttk.Button(btn_footer, text="Sobre", command=_abrir_sobre).pack(side='left', padx=11)
+    ttk.Button(btn_footer, text="Soporte", command=_abrir_soporte).pack(side='left', padx=11)
+
+    tk.Label(root, text="Desarrollado por PRACTICADORES.DEV", bg="#375aab", fg="#c7e0fa", font=("Segoe UI", 11, "italic")).pack(side="bottom", pady=8)
     root.mainloop()
 
 
-
-# --------- Interfaz principal: sólo pestaña alumnos + botones ---------
+# --------- Interfaz principal: pestaña alumnos + acciones ---------
 def pantalla_principal(dbname, usuario):
     root = tk.Tk()
     root.title(f"AcademyGo - {dbname} (Usuario: {usuario})")
@@ -137,7 +181,6 @@ def pantalla_principal(dbname, usuario):
     logo_label.pack(side="left", padx=18, pady=8)
     tk.Label(header, text="AcademyGo", bg="#375aab", fg="white", font=("Segoe UI", 23, "bold")).pack(side="left", padx=10)
     tk.Label(header, text="Gestión profesional", bg="#375aab", fg="#c7e0fa", font=("Segoe UI", 15, "italic")).pack(side="left", padx=8, pady=16)
-    # Prisma a la derecha
     canvas = tk.Canvas(header, width=88, height=72, bg="#375aab", highlightthickness=0)
     canvas.pack(side="right", padx=18)
     _animar_prisma(canvas, scale=0.47, offset_x=44, offset_y=38)
@@ -153,6 +196,8 @@ def pantalla_principal(dbname, usuario):
     botones = tk.Frame(root, bg=TAB_COLOR)
     botones.pack(pady=(10, 0))
     ttk.Button(botones, text="Búsqueda avanzada", command=lambda: abrir_busqueda_avanzada(dbname, root)).pack(side='left', padx=16)
+    ttk.Button(botones, text="Imprimir", command=lambda: imprimir_alumnos(dbname)).pack(side='left', padx=16)
+    ttk.Button(botones, text="Exportar PDF", command=lambda: exportar_pdf(dbname)).pack(side='left', padx=16)
     ttk.Button(botones, text="Cerrar sesión", command=lambda: [root.destroy(), pantalla_inicio()]).pack(side='left', padx=16)
 
     tk.Label(root, text="© 2025 PRACTICADORES.DEV", bg=TAB_COLOR, fg="#375aab", font=("Segoe UI", 11, "italic")).pack(side='bottom', pady=4)
@@ -301,14 +346,57 @@ def contenido_alumnos(tab, dbname, root):
     lbl_pag.pack(side='left', padx=12)
 
     # Email masivo a seleccionados
-    btn_email = ttk.Button(frame, text="Enviar email a seleccionados", command=lambda: _enviar_email_a_seleccionados(tree, dbname))
+    btn_email = ttk.Button(frame, text="Enviar email a seleccionados", command=lambda: _enviar_email_a_seleccionados(tree, dbname, root))
     btn_email.grid(row=1, column=1, pady=(4,8), sticky="w")
 
     cargar_y_actualizar()
 
+# --------- Imprimir y exportar PDF ---------
+def imprimir_alumnos(dbname):
+    datos = obtener_alumnos(dbname)
+    contenido = "Listado de Alumnos\n\n"
+    for a in datos:
+        contenido += f"{a[1]} {a[2]} | {a[3]} | {a[4]} | {a[5]} | {a[6]} | {a[7]} | {a[8]}\n"
+    with tempfile.NamedTemporaryFile("w", delete=False, suffix=".txt") as f:
+        f.write(contenido)
+        temp_file = f.name
+    if platform.system() == "Windows":
+        os.startfile(temp_file, "print")
+    elif platform.system() == "Linux":
+        os.system(f"lpr {temp_file}")
+    else:
+        messagebox.showinfo("Imprimir", f"Archivo guardado en: {temp_file}")
+
+def exportar_pdf(dbname):
+    try:
+        from reportlab.lib.pagesizes import letter
+        from reportlab.pdfgen import canvas as pdfcanvas
+    except ImportError:
+        messagebox.showerror("Falta módulo", "Instala reportlab: pip install reportlab")
+        return
+    datos = obtener_alumnos(dbname)
+    filename = simpledialog.askstring("Guardar PDF", "Nombre del archivo PDF (sin .pdf):")
+    if not filename:
+        return
+    pdf_file = f"{filename}.pdf"
+    c = pdfcanvas.Canvas(pdf_file, pagesize=letter)
+    y = 760
+    c.setFont("Helvetica", 10)
+    c.drawString(40, y, "Listado de Alumnos")
+    y -= 20
+    for a in datos:
+        linea = f"{a[1]} {a[2]} | {a[3]} | {a[4]} | {a[5]} | {a[6]} | {a[7]} | {a[8]}"
+        c.drawString(40, y, linea)
+        y -= 14
+        if y < 50:
+            c.showPage()
+            c.setFont("Helvetica", 10)
+            y = 760
+    c.save()
+    messagebox.showinfo("PDF", f"PDF guardado como {pdf_file}")
+
 # --------- Utilidades internas ---------
 def _animar_prisma(canvas, scale=1, offset_x=None, offset_y=None):
-    # Pirámide/Prisma animado, igual que en tu ejemplo anterior
     center_x = (offset_x if offset_x else canvas.winfo_width()//2)
     center_y = (offset_y if offset_y else canvas.winfo_height()//2)
     size = 60 * scale
@@ -340,7 +428,6 @@ def _animar_prisma(canvas, scale=1, offset_x=None, offset_y=None):
 def _parse_fecha(txt):
     if not txt:
         return None
-    # Formato europeo dd-mm-yyyy
     d, m, y = map(int, txt.split("-"))
     return datetime.date(y, m, d)
 
@@ -348,19 +435,20 @@ def _cambiar_pagina(pagina_actual, delta, cargar_func):
     pagina_actual[0] += delta
     cargar_func()
 
-def _enviar_email_a_seleccionados(tree, dbname):
+from email_dialog import ventana_redactar_email
+
+def _enviar_email_a_seleccionados(tree, dbname, parent):
     seleccionados = [tree.item(iid, "values") for iid in tree.selection()]
     if not seleccionados:
-        messagebox.showwarning("Sin selección", "Selecciona alumnos de la tabla para enviarles email.")
+        messagebox.showwarning("Sin selección", "Selecciona alumnos de la tabla para enviarles email.", parent=parent)
         return
     emails = [alum[5] for alum in seleccionados if alum[5]]
     if not emails:
-        messagebox.showwarning("Sin emails", "Ningún alumno seleccionado tiene email.")
+        messagebox.showwarning("Sin emails", "Ningún alumno seleccionado tiene email.", parent=parent)
         return
-    asunto = simpledialog.askstring("Asunto del email", "Introduce el asunto del email:")
-    mensaje = simpledialog.askstring("Mensaje", "Introduce el cuerpo del email:")
-    if not asunto or not mensaje:
-        return
-    enviados, errores = enviar_email_masivo(emails, asunto, mensaje)
-    messagebox.showinfo("Email", f"Emails enviados: {enviados}\nFallidos: {errores}")
+    ventana_redactar_email(parent, emails)
+
+
+
+
 
