@@ -9,7 +9,7 @@ from models import (
 )
 from busqueda_avanzada import abrir_busqueda_avanzada
 from email_dialog import ventana_redactar_email
-
+from profesores import ventana_gestion_profesores
 from email_utils import enviar_email_masivo
 import platform
 import math
@@ -247,7 +247,11 @@ def pantalla_principal(dbname, usuario):
     ttk.Button(botones, text="Búsqueda avanzada", command=lambda: abrir_busqueda_avanzada(dbname, root)).pack(side='left', padx=16)
     ttk.Button(botones, text="Imprimir", command=lambda: imprimir_alumnos(dbname)).pack(side='left', padx=16)
     ttk.Button(botones, text="Exportar PDF", command=lambda: exportar_pdf(dbname)).pack(side='left', padx=16)
+    ttk.Button(botones, text="Profesores", command=lambda: ventana_gestion_profesores(dbname, root)).pack(side='left', padx=16)  # <--- AQUÍ
     ttk.Button(botones, text="Cerrar sesión", command=lambda: [root.destroy(), pantalla_inicio()]).pack(side='left', padx=16)
+    # ... (el resto igual)
+
+
     # Usuario y contraseña de la BD para el backup
     DB_USER = "root"
     DB_PASS = "TuContraseñaSegura"  # <-- pon tu password real
