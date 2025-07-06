@@ -7,6 +7,8 @@ from models import (
     autenticar_usuario, crear_usuario,
     agregar_alumno, actualizar_alumno, borrar_alumno, obtener_alumnos,
 )
+from config_email import ventana_config_email, cargar_config_email
+import sys
 from busqueda_avanzada import abrir_busqueda_avanzada
 from email_dialog import ventana_redactar_email
 from profesores import ventana_gestion_profesores
@@ -20,6 +22,17 @@ import os
 import pandas as pd
 from tkinter import filedialog
 import subprocess
+
+def resource_path(relative_path):
+    """
+    Obtiene la ruta absoluta al recurso, tanto en desarrollo como en el ejecutable PyInstaller.
+    """
+    try:
+        # PyInstaller guarda los recursos en una carpeta temporal (_MEIPASS)
+        base_path = sys._MEIPASS
+    except AttributeError:
+        base_path = os.path.abspath(".")
+    return os.path.join(base_path, relative_path)
 
 def backup_base_datos(dbname, user, password, parent=None):
     archivo = filedialog.asksaveasfilename(
@@ -223,7 +236,7 @@ def pantalla_principal(dbname, usuario):
     # Header y prisma
     header = tk.Frame(root, bg="#375aab", height=72)
     header.pack(fill='x', side='top')
-    logo_img = Image.open("academygo.png").resize((50, 50), Image.LANCZOS)
+    logo_img = Image.open(resource_path("academygo.png")).resize((50, 50), Image.LANCZOS)
     logo_tk = ImageTk.PhotoImage(logo_img)
     logo_label = tk.Label(header, image=logo_tk, bg="#375aab")
     logo_label.image = logo_tk
@@ -609,6 +622,8 @@ def _animar_prisma(canvas, scale=1, offset_x=None, offset_y=None):
     center_y = (offset_y if offset_y else canvas.winfo_height()//2)
     size = 60 * scale
     angle = [0]
+    after_id = [None]  # Añadido: para poder cancelar el after
+
     def draw(a):
         canvas.delete("pyramid")
         base_coords = [(-size, size), (size, size), (0, -size)]
@@ -627,10 +642,20 @@ def _animar_prisma(canvas, scale=1, offset_x=None, offset_y=None):
             p2 = points_base[(i + 1) % 3]
             canvas.create_polygon(p1, p2, apex_abs, fill="#4f8a8b", outline="#ffffff", tags="pyramid")
         canvas.create_polygon(*points_base, fill="#36608a", outline="#ffffff", tags="pyramid")
+
     def animar():
-        draw(angle[0])
-        angle[0] += 2
-        canvas.after(40, animar)
+        try:
+            draw(angle[0])
+            angle[0] += 2
+            after_id[0] = canvas.after(40, animar)
+        except tk.TclError:
+            # El canvas ya no existe, cancelamos la animación
+            if after_id[0]:
+                try:
+                    canvas.after_cancel(after_id[0])
+                except Exception:
+                    pass
+
     animar()
 
 def _parse_fecha(txt):
@@ -654,7 +679,19 @@ def _enviar_email_a_seleccionados(tree, dbname, parent):
     if not emails:
         messagebox.showwarning("Sin emails", "Ningún alumno seleccionado tiene email.", parent=parent)
         return
-    ventana_redactar_email(parent, emails)
+
+    # --- NUEVO: verifica configuración SMTP ---
+    config = cargar_config_email()
+    if not config:
+        messagebox.showinfo("Configurar correo", "Primero debes configurar el correo electrónico para enviar emails.")
+        ventana_config_email(parent)
+        config = cargar_config_email()
+        if not config:
+            messagebox.showerror("Error", "No se pudo enviar email porque no hay configuración SMTP.")
+            return
+
+    from email_dialog import ventana_redactar_email
+    ventana_redactar_email(parent, emails, config)
 
 
 
